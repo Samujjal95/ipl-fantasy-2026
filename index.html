@@ -10,6 +10,7 @@
   <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -405,6 +406,8 @@
   };
   firebase.initializeApp(firebaseConfig);
   var db = firebase.firestore();
+  var auth = firebase.auth();
+  var provider = new firebase.auth.GoogleAuthProvider();
 </script>
 
 <script type="text/babel">
@@ -640,6 +643,19 @@ function App() {
         </div>
         <div className="header-right">
           <div title="Live sync active" className="sync-dot" />
+          <button 
+  className="header-btn"
+  onClick={async () => {
+    try {
+      const res = await auth.signInWithPopup(provider);
+      alert("Logged in as: " + res.user.email);
+    } catch (e) {
+      alert("Login failed: " + e.message);
+    }
+  }}
+>
+  🔐 Login
+</button>
           <button className="header-btn" onClick={()=>setEditModal(true)}>✏️ Edit Players</button>
           <button className="header-btn" style={{borderColor:'rgba(245,166,35,0.4)',color:'var(--gold)',background:'rgba(245,166,35,0.06)'}} onClick={()=>setAddMatchModal(true)}>
             ＋ Add Match
