@@ -531,6 +531,7 @@ function App() {
   const [addMatchModal, setAddMatchModal] = useState(false);
   const [toast, setToast]               = useState(null);
   const [saving, setSaving]             = useState(false);
+  const [user, setUser]                 = useState(null);
 
   const allMatches = useMemo(()=>[...BASE_MATCHES,...customMatches].sort((a,b)=>a.id-b.id),[customMatches]);
   const leaderboard = useMemo(()=>calcLeaderboard(scores,players),[scores,players]);
@@ -567,6 +568,10 @@ function App() {
       },
       err => { console.error(err); setFbError('Could not load scores. Check your Firestore rules.'); setLoading(false); }
     );
+
+    auth.onAuthStateChanged((u) => {
+    setUser(u);
+    });
 
     return ()=>{ unsubConfig(); unsubScores(); };
   },[]);
@@ -643,19 +648,50 @@ function App() {
         </div>
         <div className="header-right">
           <div title="Live sync active" className="sync-dot" />
-          <button 
-  className="header-btn"
-  onClick={async () => {
-    try {
-      const res = await auth.signInWithPopup(provider);
-      alert("Logged in as: " + res.user.email);
-    } catch (e) {
-      alert("Login failed: " + e.message);
-    }
-  }}
->
-  🔐 Login
-</button>
+          <div className="header-right">
+  <div title="Live sync active" className="sync-dot" />
+
+  {/* 🔐 LOGIN / LOGOUT (PASTE HERE) */}
+  {!user ? (
+    <button 
+      className="header-btn"
+      onClick={async () => {
+        try {
+          const res = await auth.signInWithPopup(provider);
+          console.log("Logged in:", res.user.email);
+        } catch (e) {
+          alert("Login failed: " + e.message);
+        }
+      }}
+    >
+      🔐 Login
+    </button>
+  ) : (
+    <button className="header-btn" onClick={()=>auth.signOut()}>
+      🚪 Logout ({user.email})
+    </button>
+  )}
+
+  <button className="header-btn" onClick={()=>setEditModal(true)}>
+    ✏️ Edit Players
+  </button>
+
+  <button 
+    className="header-btn"
+    style={{
+      borderColor:'rgba(245,166,35,0.4)',
+      color:'var(--gold)',
+      background:'rgba(245,166,35,0.06)'
+    }}
+    onClick={()=>setAddMatchModal(true)}
+  >
+    ＋ Add Match
+  </button>
+
+  <div className="match-badge">
+    {completedCount}/{totalMatches} SCORED
+  </div>
+</div>
           <button className="header-btn" onClick={()=>setEditModal(true)}>✏️ Edit Players</button>
           <button className="header-btn" style={{borderColor:'rgba(245,166,35,0.4)',color:'var(--gold)',background:'rgba(245,166,35,0.06)'}} onClick={()=>setAddMatchModal(true)}>
             ＋ Add Match
