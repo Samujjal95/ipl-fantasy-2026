@@ -7,6 +7,9 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -33,6 +36,24 @@
         radial-gradient(ellipse 60% 40% at 80% 100%, rgba(78,205,196,0.04) 0%, transparent 60%);
     }
 
+    /* ── LOADING SCREEN ── */
+    .loading-screen {
+      position: fixed; inset: 0; background: var(--bg-deep);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; z-index: 500;
+    }
+    .loading-logo { font-size: 3.5rem; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.1);opacity:0.7;} }
+    .loading-title {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 1.5rem; font-weight: 800;
+      letter-spacing: 3px; color: var(--gold); text-transform: uppercase;
+    }
+    .loading-sub { font-size: 0.85rem; color: var(--text-dim); letter-spacing: 1px; }
+    .loading-bar-wrap { width: 200px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    .loading-bar { height: 100%; background: linear-gradient(90deg,var(--gold),var(--teal)); border-radius: 2px; animation: loadSlide 1.5s ease-in-out infinite; }
+    @keyframes loadSlide { 0%{width:0;margin-left:0;} 50%{width:100%;margin-left:0;} 100%{width:0;margin-left:100%;} }
+    .loading-err { font-size: 0.85rem; color: #ff7070; text-align: center; max-width: 320px; line-height: 1.5; }
+
     /* ── HEADER ── */
     .header {
       display: flex; align-items: center; justify-content: space-between;
@@ -48,17 +69,22 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
     .header-title p { font-size: 0.75rem; color: var(--text-dim); letter-spacing: 1.5px; margin-top: 1px; }
-    .header-right { display: flex; align-items: center; gap: 10px; }
+    .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
     .match-badge {
       font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem; font-weight: 700; letter-spacing: 1px;
       border: 1.5px solid var(--gold); color: var(--gold); padding: 6px 14px; border-radius: 20px;
     }
-    .btn-edit-players {
+    .sync-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--teal);
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    .header-btn {
       font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 1px;
       border: 1.5px solid rgba(78,205,196,0.4); color: var(--teal);
       padding: 6px 14px; border-radius: 20px; background: transparent; cursor: pointer; transition: all 0.2s;
     }
-    .btn-edit-players:hover { background: rgba(78,205,196,0.1); border-color: var(--teal); }
+    .header-btn:hover { background: rgba(78,205,196,0.1); border-color: var(--teal); }
 
     /* ── NAV ── */
     .nav-wrap { padding: 20px 32px 0; }
@@ -124,7 +150,7 @@
     .matches-played .played { color: var(--text); }
     .matches-played .total-m { color: var(--text-dim); }
 
-    /* ── EMPTY STATE ── */
+    /* ── EMPTY ── */
     .empty-state {
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; padding: 80px 20px; gap: 16px;
@@ -167,7 +193,7 @@
     }
     .player-input-card .p-name { font-weight: 600; font-size: 0.95rem; flex: 1; }
     .pts-input-wrap {
-      display: flex; align-items: center; gap: 6px;
+      display: flex; align-items: center;
       background: var(--bg-card); border: 1px solid var(--border);
       border-radius: 6px; overflow: hidden;
     }
@@ -186,6 +212,7 @@
       border: none; border-radius: 8px; padding: 14px 36px; cursor: pointer; transition: all 0.2s; text-transform: uppercase;
     }
     .btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,166,35,0.4); }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
     .save-row { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
     .already-saved-badge {
       font-size: 0.85rem; color: var(--teal); font-weight: 600;
@@ -198,13 +225,19 @@
     .progress-bar { height: 100%; background: linear-gradient(90deg, var(--gold), var(--teal)); border-radius: 2px; transition: width 0.5s ease; }
 
     /* ── FILTER BUTTONS ── */
-    .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
     .filter-btn {
       font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 1px;
       padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer;
       background: transparent; color: var(--text-dim); transition: all 0.15s;
     }
     .filter-btn:hover, .filter-btn.active { background: rgba(245,166,35,0.15); color: var(--gold); border-color: var(--gold); }
+    .btn-add-match {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 1px;
+      padding: 6px 14px; border-radius: 6px; border: 1.5px solid rgba(78,205,196,0.4); cursor: pointer;
+      background: rgba(78,205,196,0.08); color: var(--teal); transition: all 0.15s; margin-left: auto;
+    }
+    .btn-add-match:hover { background: rgba(78,205,196,0.18); border-color: var(--teal); }
 
     /* ── MATCH HISTORY ── */
     .history-grid { display: flex; flex-direction: column; gap: 16px; }
@@ -214,8 +247,8 @@
     }
     .history-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 20px; background: rgba(0,0,0,0.2); cursor: pointer; transition: background 0.15s;
-      border-bottom: 1px solid transparent;
+      padding: 14px 20px; background: rgba(0,0,0,0.2); cursor: pointer;
+      transition: background 0.15s; border-bottom: 1px solid transparent;
     }
     .history-header:hover { background: rgba(0,0,0,0.32); }
     .history-header.open { border-bottom-color: var(--border); }
@@ -224,16 +257,16 @@
       font-family: 'Barlow Condensed', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 1px;
       background: rgba(245,166,35,0.15); color: var(--gold); padding: 4px 10px; border-radius: 4px; white-space: nowrap;
     }
+    .match-num.custom { background: rgba(78,205,196,0.12); color: var(--teal); }
     .match-teams { font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem; font-weight: 700; }
     .match-info-sm { font-size: 0.8rem; color: var(--text-dim); }
     .history-expand { font-size: 0.85rem; color: var(--text-dim); }
 
-    /* ── RANKED LIST (new match history expanded view) ── */
+    /* ── RANKED LIST ── */
     .ranked-list { }
     .ranked-row {
       display: flex; align-items: center; gap: 14px;
-      padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.04);
-      transition: background 0.12s;
+      padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.12s;
     }
     .ranked-row:last-child { border-bottom: none; }
     .ranked-row:hover { background: rgba(255,255,255,0.015); }
@@ -241,7 +274,6 @@
     .ranked-row.row-silver { background: rgba(192,192,192,0.04); }
     .ranked-row.row-bronze { background: rgba(205,127,50,0.04); }
     .ranked-row.row-dnp    { opacity: 0.45; }
-
     .avatar-circle {
       width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
@@ -253,37 +285,18 @@
     .av-bronze  { background: linear-gradient(135deg,#cd7f32,#e8a96a); color: #0a1628; border-color: rgba(205,127,50,0.5); }
     .av-default { background: var(--bg-row); color: var(--text-dim); border-color: rgba(255,255,255,0.08); }
     .av-dnp     { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.05); }
-
     .ranked-info { flex: 1; min-width: 0; }
     .ranked-name { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
     .ranked-sub  { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
-
-    .badge-w {
-      font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;
-      background: rgba(245,166,35,0.2); color: var(--gold); border: 1px solid rgba(245,166,35,0.45);
-      padding: 2px 8px; border-radius: 4px;
-    }
-    .badge-2 {
-      font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700;
-      background: rgba(192,192,192,0.12); color: #c8d4e0; border: 1px solid rgba(192,192,192,0.3);
-      padding: 2px 8px; border-radius: 4px;
-    }
-    .badge-3 {
-      font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700;
-      background: rgba(205,127,50,0.12); color: #e8b07a; border: 1px solid rgba(205,127,50,0.3);
-      padding: 2px 8px; border-radius: 4px;
-    }
-
-    .ranked-pts {
-      font-family: 'Barlow Condensed', sans-serif; font-size: 1.5rem; font-weight: 800;
-      min-width: 64px; text-align: right; letter-spacing: 0.5px;
-    }
-    .pts-g  { color: var(--gold-light); }
-    .pts-s  { color: #c8d4e0; }
-    .pts-b  { color: #e8b07a; }
-    .pts-n  { color: var(--text); }
-    .pts-dnp{ font-size: 0.75rem; color: var(--text-dim); font-weight: 600; letter-spacing: 1px; line-height: 2; }
-
+    .badge-w { font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700; background: rgba(245,166,35,0.2); color: var(--gold); border: 1px solid rgba(245,166,35,0.45); padding: 2px 8px; border-radius: 4px; }
+    .badge-2 { font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700; background: rgba(192,192,192,0.12); color: #c8d4e0; border: 1px solid rgba(192,192,192,0.3); padding: 2px 8px; border-radius: 4px; }
+    .badge-3 { font-family: 'Barlow Condensed', sans-serif; font-size: 0.68rem; font-weight: 700; background: rgba(205,127,50,0.12); color: #e8b07a; border: 1px solid rgba(205,127,50,0.3); padding: 2px 8px; border-radius: 4px; }
+    .ranked-pts { font-family: 'Barlow Condensed', sans-serif; font-size: 1.5rem; font-weight: 800; min-width: 64px; text-align: right; letter-spacing: 0.5px; }
+    .pts-g   { color: var(--gold-light); }
+    .pts-s   { color: #c8d4e0; }
+    .pts-b   { color: #e8b07a; }
+    .pts-n   { color: var(--text); }
+    .pts-dnp { font-size: 0.75rem; color: var(--text-dim); font-weight: 600; letter-spacing: 1px; line-height: 2; }
     .ranked-pos {
       width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
@@ -297,18 +310,20 @@
 
     /* ── MODAL ── */
     .modal-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
       display: flex; align-items: center; justify-content: center;
       z-index: 200; backdrop-filter: blur(4px);
     }
     .modal-box {
       background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
       padding: 28px; width: 480px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      max-height: 90vh; overflow-y: auto;
     }
     .modal-title {
       font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem; font-weight: 800;
-      letter-spacing: 2px; color: var(--gold); margin-bottom: 20px; text-transform: uppercase;
+      letter-spacing: 2px; color: var(--gold); margin-bottom: 6px; text-transform: uppercase;
     }
+    .modal-sub { font-size: 0.82rem; color: var(--text-dim); margin-bottom: 20px; }
     .edit-players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
     .edit-player-row { display: flex; align-items: center; gap: 8px; }
     .edit-player-num { font-family: 'Barlow Condensed', sans-serif; font-size: 0.78rem; font-weight: 700; color: var(--text-dim); width: 20px; text-align: right; flex-shrink: 0; }
@@ -318,7 +333,26 @@
       font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 600; outline: none;
     }
     .edit-player-input:focus { border-color: var(--gold); }
-    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    /* Add Match modal specific */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 0.72rem; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
+    .form-input {
+      width: 100%; background: var(--bg-row); border: 1px solid var(--border);
+      color: var(--text); padding: 10px 14px; border-radius: 8px;
+      font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; font-weight: 600; outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: var(--gold); }
+    .form-input::placeholder { color: var(--text-dim); font-weight: 400; }
+    .form-hint { font-size: 0.75rem; color: var(--text-dim); margin-top: 5px; }
+    .next-id-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(245,166,35,0.12); border: 1px solid rgba(245,166,35,0.25);
+      color: var(--gold); padding: 8px 14px; border-radius: 8px;
+      font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; font-weight: 700;
+      margin-bottom: 18px;
+    }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
     .btn-modal-cancel {
       font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; font-weight: 700; letter-spacing: 1px;
       background: transparent; border: 1px solid var(--border); color: var(--text-dim);
@@ -331,6 +365,13 @@
       border: none; padding: 10px 28px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
     }
     .btn-modal-save:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,166,35,0.35); }
+    .btn-modal-save:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-modal-teal {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; font-weight: 800; letter-spacing: 1px;
+      background: linear-gradient(135deg, var(--teal), #3ab5ac); color: #0a1628;
+      border: none; padding: 10px 28px; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-modal-teal:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(78,205,196,0.35); }
 
     /* ── TOAST ── */
     .toast {
@@ -340,8 +381,9 @@
       padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 24px rgba(245,166,35,0.5);
       z-index: 9999; animation: fadeInUp 0.3s ease, fadeOut 0.4s ease 2.2s forwards;
     }
-    @keyframes fadeInUp { from { opacity:0; transform:translateX(-50%) translateY(12px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-    @keyframes fadeOut  { from { opacity:1; } to { opacity:0; } }
+    @keyframes fadeInUp { from{opacity:0;transform:translateX(-50%) translateY(12px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+    @keyframes fadeOut  { from{opacity:1;} to{opacity:0;} }
+
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(245,166,35,0.3); border-radius: 3px; }
@@ -349,11 +391,30 @@
 </head>
 <body>
 <div id="root"></div>
+
+<!-- Initialize Firebase BEFORE React -->
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyAFHBYHnnFIWUBIe9GrE44H1BFPj945nmY",
+    authDomain: "ipl-fantasy-2026-per.firebaseapp.com",
+    projectId: "ipl-fantasy-2026-per",
+    storageBucket: "ipl-fantasy-2026-per.firebasestorage.app",
+    messagingSenderId: "1097062135559",
+    appId: "1:1097062135559:web:1f1ce41b7e2478290537a2",
+    measurementId: "G-888K132FDE"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.firestore();
+</script>
+
 <script type="text/babel">
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useRef } = React;
+
+// ── FIXED MATCHES (IPL 2026 schedule) ────────────────────────────────────
 
 const DEFAULT_PLAYERS = ['Bony','Agni','Ayan Da','Joydeep','Rony','Saptarshi Da','Jitanjan','Aritree','Vicky','Ziko','Sourodip','Dipta'];
-const MATCHES = [
+
+const BASE_MATCHES = [
   {id:1,teams:'RCB vs SRH',date:'Sat, 28-Mar',venue:'Bengaluru'},
   {id:2,teams:'MI vs KKR',date:'Sun, 29-Mar',venue:'Mumbai'},
   {id:3,teams:'RR vs CSK',date:'Mon, 30-Mar',venue:'Guwahati'},
@@ -426,14 +487,6 @@ const MATCHES = [
   {id:70,teams:'KKR vs DC',date:'Sun, 24-May',venue:'Kolkata'},
 ];
 
-const LS_SCORES  = 'ipl_fantasy_2026_scores';
-const LS_PLAYERS = 'ipl_fantasy_2026_players';
-
-function loadLS(key, fallback) {
-  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; }
-  catch { return fallback; }
-}
-
 function getInitials(name) {
   return name.trim().split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
 }
@@ -443,52 +496,137 @@ function calcLeaderboard(scores, players) {
   return players.map(player => {
     let total=0, played=0, top3=0;
     ids.forEach(mId => {
-      const pts = scores[mId][player];
-      if (pts!==undefined && pts!==null && pts!=='') { total+=Number(pts); played++; }
+      const pts = scores[mId] ? scores[mId][player] : undefined;
+      if (pts !== undefined && pts !== null && pts !== '') { total += Number(pts); played++; }
     });
     ids.forEach(mId => {
+      if (!scores[mId]) return;
       const pts = scores[mId][player];
-      if (pts===undefined||pts===null||pts==='') return;
+      if (pts === undefined || pts === null || pts === '') return;
       const ranked = players
-        .filter(p => scores[mId][p]!==undefined&&scores[mId][p]!==null&&scores[mId][p]!=='')
-        .map(p => ({p, v:Number(scores[mId][p])}))
+        .filter(p => scores[mId][p] !== undefined && scores[mId][p] !== null && scores[mId][p] !== '')
+        .map(p => ({p, v: Number(scores[mId][p])}))
         .sort((a,b)=>b.v-a.v);
       const pos = ranked.findIndex(r=>r.p===player);
-      if (pos!==-1&&pos<3) top3++;
+      if (pos !== -1 && pos < 3) top3++;
     });
     return { player, total, matchesPlayed:played, totalCompleted:ids.length,
-      avgPts: played>0?(total/played).toFixed(1):'0.0', top3 };
+      avgPts: played > 0 ? (total/played).toFixed(1) : '0.0', top3 };
   }).sort((a,b)=>b.total-a.total||b.matchesPlayed-a.matchesPlayed);
 }
 
 // ── APP ──────────────────────────────────────────────────────────────────
 
 function App() {
-  const [tab, setTab]         = useState('leaderboard');
-  const [scores, setScores]   = useState(()=>loadLS(LS_SCORES,{}));
-  const [players, setPlayers] = useState(()=>loadLS(LS_PLAYERS,DEFAULT_PLAYERS));
-  const [editModal, setEditModal] = useState(false);
-  const [toast, setToast]     = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [fbError, setFbError]           = useState(null);
+  const [tab, setTab]                   = useState('leaderboard');
+  const [scores, setScores]             = useState({});
+  const [players, setPlayers]           = useState(DEFAULT_PLAYERS);
+  const [customMatches, setCustomMatches] = useState([]);
+  const [editModal, setEditModal]       = useState(false);
+  const [addMatchModal, setAddMatchModal] = useState(false);
+  const [toast, setToast]               = useState(null);
+  const [saving, setSaving]             = useState(false);
 
-  function showToast(msg) { setToast(msg); setTimeout(()=>setToast(null),2600); }
-
-  function handleSave(matchId, ms) {
-    const u={...scores,[matchId]:ms};
-    setScores(u); localStorage.setItem(LS_SCORES,JSON.stringify(u));
-    showToast('✓ Scores saved for Match '+matchId);
-  }
-  function handleDelete(matchId) {
-    const u={...scores}; delete u[matchId];
-    setScores(u); localStorage.setItem(LS_SCORES,JSON.stringify(u));
-    showToast('Match '+matchId+' deleted');
-  }
-  function handleSavePlayers(np) {
-    setPlayers(np); localStorage.setItem(LS_PLAYERS,JSON.stringify(np));
-    setEditModal(false); showToast('✓ Player names updated');
-  }
-
-  const completedCount = Object.keys(scores).length;
+  const allMatches = useMemo(()=>[...BASE_MATCHES,...customMatches].sort((a,b)=>a.id-b.id),[customMatches]);
   const leaderboard = useMemo(()=>calcLeaderboard(scores,players),[scores,players]);
+  const completedCount = Object.keys(scores).length;
+  const totalMatches = allMatches.length;
+
+  function showToast(msg) { setToast(msg); setTimeout(()=>setToast(null),2700); }
+
+  // ── FIRESTORE LISTENERS ──
+  useEffect(()=>{
+    let configReady=false, scoresReady=false;
+    function tryDone(){ if(configReady&&scoresReady) setLoading(false); }
+
+    // Config (players + custom matches)
+    const unsubConfig = db.collection('app').doc('config').onSnapshot(
+      snap => {
+        if (snap.exists) {
+          const d = snap.data();
+          if (d.players && Array.isArray(d.players)) setPlayers(d.players);
+          if (d.customMatches && Array.isArray(d.customMatches)) setCustomMatches(d.customMatches);
+        }
+        configReady=true; tryDone();
+      },
+      err => { console.error(err); setFbError('Could not connect to Firebase. Check your Firestore rules.'); setLoading(false); }
+    );
+
+    // Scores collection
+    const unsubScores = db.collection('scores').onSnapshot(
+      snap => {
+        const s={};
+        snap.forEach(doc=>{ s[Number(doc.id)] = doc.data(); });
+        setScores(s);
+        scoresReady=true; tryDone();
+      },
+      err => { console.error(err); setFbError('Could not load scores. Check your Firestore rules.'); setLoading(false); }
+    );
+
+    return ()=>{ unsubConfig(); unsubScores(); };
+  },[]);
+
+  // ── SAVE SCORES ──
+  async function handleSave(matchId, matchScores) {
+    setSaving(true);
+    try {
+      await db.collection('scores').doc(String(matchId)).set(matchScores);
+      showToast('✓ Scores saved for Match '+matchId);
+    } catch(e) { showToast('⚠ Error saving: '+e.message); }
+    setSaving(false);
+  }
+
+  // ── DELETE MATCH SCORES ──
+  async function handleDelete(matchId) {
+    try {
+      await db.collection('scores').doc(String(matchId)).delete();
+      showToast('Match '+matchId+' scores deleted');
+    } catch(e) { showToast('⚠ Error: '+e.message); }
+  }
+
+  // ── SAVE PLAYERS ──
+  async function handleSavePlayers(newPlayers) {
+    try {
+      await db.collection('app').doc('config').set({players: newPlayers}, {merge:true});
+      setEditModal(false);
+      showToast('✓ Player names updated for everyone');
+    } catch(e) { showToast('⚠ Error: '+e.message); }
+  }
+
+  // ── ADD CUSTOM MATCH ──
+  async function handleAddMatch(newMatch) {
+    const updated = [...customMatches, newMatch];
+    try {
+      await db.collection('app').doc('config').set({customMatches: updated}, {merge:true});
+      setAddMatchModal(false);
+      showToast(`✓ Match ${newMatch.id} added: ${newMatch.teams}`);
+    } catch(e) { showToast('⚠ Error: '+e.message); }
+  }
+
+  // ── DELETE CUSTOM MATCH ──
+  async function handleDeleteCustomMatch(matchId) {
+    const updated = customMatches.filter(m=>m.id!==matchId);
+    try {
+      await db.collection('app').doc('config').set({customMatches: updated}, {merge:true});
+      // Also delete its scores
+      await db.collection('scores').doc(String(matchId)).delete();
+      showToast('Custom match '+matchId+' deleted');
+    } catch(e) { showToast('⚠ Error: '+e.message); }
+  }
+
+  if (loading) return (
+    <div className="loading-screen">
+      <div className="loading-logo">🏏</div>
+      <div className="loading-title">IPL Fantasy League 2026</div>
+      <div className="loading-bar-wrap"><div className="loading-bar" /></div>
+      <div className="loading-sub">Connecting to Firebase…</div>
+      {fbError && <div className="loading-err">⚠ {fbError}</div>}
+    </div>
+  );
+
+  const nextMatchId = allMatches.length > 0 ? Math.max(...allMatches.map(m=>m.id)) + 1 : 71;
 
   return (
     <div>
@@ -497,12 +635,16 @@ function App() {
           <div className="header-logo">🏏</div>
           <div className="header-title">
             <h1>IPL FANTASY LEAGUE</h1>
-            <p>IPL 2026 · 70 MATCHES · 12 PLAYERS</p>
+            <p>IPL 2026 · {totalMatches} MATCHES · 12 PLAYERS</p>
           </div>
         </div>
         <div className="header-right">
-          <button className="btn-edit-players" onClick={()=>setEditModal(true)}>✏️ Edit Players</button>
-          <div className="match-badge">{completedCount}/70 MATCHES</div>
+          <div title="Live sync active" className="sync-dot" />
+          <button className="header-btn" onClick={()=>setEditModal(true)}>✏️ Edit Players</button>
+          <button className="header-btn" style={{borderColor:'rgba(245,166,35,0.4)',color:'var(--gold)',background:'rgba(245,166,35,0.06)'}} onClick={()=>setAddMatchModal(true)}>
+            ＋ Add Match
+          </button>
+          <div className="match-badge">{completedCount}/{totalMatches} SCORED</div>
         </div>
       </header>
 
@@ -517,17 +659,24 @@ function App() {
       </div>
 
       <div className="main">
-        {completedCount>0 && (
+        {completedCount>0 && totalMatches>0 && (
           <div className="progress-bar-wrap">
-            <div className="progress-bar" style={{width:`${(completedCount/70)*100}%`}} />
+            <div className="progress-bar" style={{width:`${Math.min((completedCount/totalMatches)*100,100)}%`}} />
           </div>
         )}
         {tab==='leaderboard' && <Leaderboard leaderboard={leaderboard} completedCount={completedCount} />}
-        {tab==='add'         && <AddScore scores={scores} players={players} onSave={handleSave} />}
-        {tab==='history'     && <MatchHistory scores={scores} players={players} onDelete={handleDelete} />}
+        {tab==='add'         && <AddScore scores={scores} players={players} allMatches={allMatches} onSave={handleSave} saving={saving} />}
+        {tab==='history'     && <MatchHistory scores={scores} players={players} allMatches={allMatches} customMatches={customMatches} onDelete={handleDelete} onDeleteCustom={handleDeleteCustomMatch} />}
       </div>
 
       {editModal && <EditPlayersModal players={players} onSave={handleSavePlayers} onClose={()=>setEditModal(false)} />}
+      {addMatchModal && (
+        <AddMatchModal
+          nextId={nextMatchId}
+          onSave={handleAddMatch}
+          onClose={()=>setAddMatchModal(false)}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -542,6 +691,7 @@ function EditPlayersModal({players, onSave, onClose}) {
     <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal-box">
         <div className="modal-title">✏️ Edit Player Names</div>
+        <div className="modal-sub">Changes are saved to Firebase and visible to everyone instantly.</div>
         <div className="edit-players-grid">
           {draft.map((name,i)=>(
             <div className="edit-player-row" key={i}>
@@ -553,7 +703,66 @@ function EditPlayersModal({players, onSave, onClose}) {
         </div>
         <div className="modal-actions">
           <button className="btn-modal-cancel" onClick={onClose}>Cancel</button>
-          <button className="btn-modal-save" onClick={()=>onSave(draft.map((n,i)=>n.trim()||`Player ${i+1}`))}>Save Names</button>
+          <button className="btn-modal-save" onClick={()=>onSave(draft.map((n,i)=>n.trim()||`Player ${i+1}`))}>
+            Save Names
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ADD MATCH MODAL ──────────────────────────────────────────────────────
+
+function AddMatchModal({nextId, onSave, onClose}) {
+  const [teams, setTeams]   = useState('');
+  const [date, setDate]     = useState('');
+  const [venue, setVenue]   = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const valid = teams.trim() && date.trim() && venue.trim();
+
+  async function handleSave() {
+    if (!valid) return;
+    setSaving(true);
+    await onSave({ id: nextId, teams: teams.trim(), date: date.trim(), venue: venue.trim(), custom: true });
+    setSaving(false);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="modal-box">
+        <div className="modal-title">➕ Add New Match</div>
+        <div className="modal-sub">Add a match beyond the original 70 — playoffs, finals, or any extra games.</div>
+
+        <div className="next-id-badge">
+          🏏 This will be Match #{nextId}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Teams *</label>
+          <input className="form-input" placeholder="e.g. MI vs CSK" value={teams}
+            onChange={e=>setTeams(e.target.value)} maxLength={30} />
+          <div className="form-hint">Use short team codes: MI, CSK, RCB, KKR, SRH, DC, GT, RR, PBKS, LSG</div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Date *</label>
+          <input className="form-input" placeholder="e.g. Sun, 26-May" value={date}
+            onChange={e=>setDate(e.target.value)} maxLength={20} />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Venue *</label>
+          <input className="form-input" placeholder="e.g. Ahmedabad" value={venue}
+            onChange={e=>setVenue(e.target.value)} maxLength={30} />
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn-modal-cancel" onClick={onClose}>Cancel</button>
+          <button className="btn-modal-teal" onClick={handleSave} disabled={!valid||saving}>
+            {saving ? 'Adding…' : `Add Match #${nextId}`}
+          </button>
         </div>
       </div>
     </div>
@@ -605,13 +814,14 @@ function Leaderboard({leaderboard, completedCount}) {
 
 // ── ADD SCORE ────────────────────────────────────────────────────────────
 
-function AddScore({scores, players, onSave}) {
-  const [sel, setSel]     = useState(1);
-  const [inp, setInp]     = useState({});
-  const [dnp, setDnp]     = useState({});
-  const match = MATCHES.find(m=>m.id===sel);
+function AddScore({scores, players, allMatches, onSave, saving}) {
+  const [sel, setSel]   = useState(allMatches[0]?.id || 1);
+  const [inp, setInp]   = useState({});
+  const [dnp, setDnp]   = useState({});
+
+  const match = allMatches.find(m=>m.id===sel);
   const alreadySaved = !!scores[sel];
-  const nextId = MATCHES.find(m=>!scores[m.id])?.id;
+  const nextId = allMatches.find(m=>!scores[m.id])?.id;
 
   useEffect(()=>{
     if (scores[sel]) {
@@ -622,7 +832,7 @@ function AddScore({scores, players, onSave}) {
       });
       setInp(ni);setDnp(nd);
     } else { setInp({});setDnp({}); }
-  },[sel]);
+  },[sel, players]);
 
   function save(){
     const ms={};
@@ -635,22 +845,26 @@ function AddScore({scores, players, onSave}) {
       {nextId && nextId!==sel && (
         <div style={{marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
           <span style={{fontSize:'0.82rem',color:'var(--text-dim)'}}>Next unscored:</span>
-          <button className="filter-btn" onClick={()=>setSel(nextId)}>M{nextId}: {MATCHES.find(m=>m.id===nextId).teams}</button>
+          <button className="filter-btn" onClick={()=>setSel(nextId)}>
+            M{nextId}: {allMatches.find(m=>m.id===nextId)?.teams}
+          </button>
         </div>
       )}
       <div className="card">
         <div className="card-title">SELECT MATCH</div>
         <div className="select-wrap">
           <select className="match-select" value={sel} onChange={e=>setSel(Number(e.target.value))}>
-            {MATCHES.map(m=>(
-              <option key={m.id} value={m.id}>M{m.id}: {m.teams} · {m.date}{scores[m.id]?' ✓':''}</option>
+            {allMatches.map(m=>(
+              <option key={m.id} value={m.id}>
+                M{m.id}{m.custom?' ★':''}: {m.teams} · {m.date}{scores[m.id]?' ✓':''}
+              </option>
             ))}
           </select>
           <div className="select-arrow">▼</div>
         </div>
         {match && (
           <div className="match-meta">
-            <div className="meta-item"><label>MATCH</label><span>#{match.id}</span></div>
+            <div className="meta-item"><label>MATCH</label><span>#{match.id}{match.custom?' ★':''}</span></div>
             <div className="meta-item"><label>TEAMS</label><span>{match.teams}</span></div>
             <div className="meta-item"><label>DATE</label><span>{match.date}</span></div>
             <div className="meta-item"><label>VENUE</label><span>{match.venue}</span></div>
@@ -683,7 +897,9 @@ function AddScore({scores, players, onSave}) {
           ))}
         </div>
         <div className="save-row">
-          <button className="btn-save" onClick={save}>💾 SAVE SCORES</button>
+          <button className="btn-save" onClick={save} disabled={saving}>
+            {saving ? '⏳ SAVING…' : '💾 SAVE SCORES'}
+          </button>
           {alreadySaved && <span className="already-saved-badge">✓ Editing — will overwrite saved scores</span>}
         </div>
       </div>
@@ -693,11 +909,11 @@ function AddScore({scores, players, onSave}) {
 
 // ── MATCH HISTORY ────────────────────────────────────────────────────────
 
-function MatchHistory({scores, players, onDelete}) {
+function MatchHistory({scores, players, allMatches, customMatches, onDelete, onDeleteCustom}) {
   const [expanded, setExpanded] = useState({});
-  const ids = Object.keys(scores).map(Number).sort((a,b)=>b-a);
+  const scoredIds = Object.keys(scores).map(Number).sort((a,b)=>b-a);
 
-  if (!ids.length) return (
+  if (!scoredIds.length) return (
     <div className="empty-state">
       <div className="empty-icon">📋</div>
       <div className="empty-title">No Matches Scored Yet</div>
@@ -706,9 +922,10 @@ function MatchHistory({scores, players, onDelete}) {
   );
 
   function toggle(id){setExpanded(prev=>({...prev,[id]:!prev[id]}));}
+  const customIds = new Set(customMatches.map(m=>m.id));
 
   function getRanked(mId){
-    const ms=scores[mId];
+    const ms=scores[mId]||{};
     const active=players
       .filter(p=>ms[p]!==undefined&&ms[p]!==null&&ms[p]!=='')
       .map(p=>({player:p,pts:Number(ms[p]),dnp:false}))
@@ -723,25 +940,26 @@ function MatchHistory({scores, players, onDelete}) {
     <div>
       <div className="filter-row">
         <span style={{fontSize:'0.82rem',color:'var(--text-dim)',alignSelf:'center'}}>Show:</span>
-        <button className="filter-btn active">All ({ids.length})</button>
-        <button className="filter-btn" onClick={()=>{const a={};ids.forEach(id=>{a[id]=true;});setExpanded(a);}}>Expand All</button>
+        <button className="filter-btn active">All ({scoredIds.length})</button>
+        <button className="filter-btn" onClick={()=>{const a={};scoredIds.forEach(id=>{a[id]=true;});setExpanded(a);}}>Expand All</button>
         <button className="filter-btn" onClick={()=>setExpanded({})}>Collapse All</button>
       </div>
 
       <div className="history-grid">
-        {ids.map(mId=>{
-          const match=MATCHES.find(m=>m.id===mId);
-          if(!match) return null;
-          const ranked=getRanked(mId);
-          const isOpen=!!expanded[mId];
-          const played=ranked.filter(r=>!r.dnp);
-          const winner=played[0];
+        {scoredIds.map(mId=>{
+          const match = allMatches.find(m=>m.id===mId);
+          if (!match) return null;
+          const ranked = getRanked(mId);
+          const isOpen = !!expanded[mId];
+          const played = ranked.filter(r=>!r.dnp);
+          const winner = played[0];
+          const isCustom = customIds.has(mId);
 
           return (
             <div className="history-card" key={mId}>
               <div className={`history-header${isOpen?' open':''}`} onClick={()=>toggle(mId)}>
                 <div className="history-header-left">
-                  <span className="match-num">M{mId}</span>
+                  <span className={`match-num${isCustom?' custom':''}`}>M{mId}{isCustom?' ★':''}</span>
                   <div>
                     <div className="match-teams">{match.teams}</div>
                     <div className="match-info-sm">{match.date} · {match.venue} · {played.length} players scored</div>
@@ -750,23 +968,31 @@ function MatchHistory({scores, players, onDelete}) {
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
                   {winner && (
                     <div style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:600}}>
-                      🏆 {winner.player} &nbsp;<span style={{color:'var(--gold-light)'}}>{winner.pts} pts</span>
+                      🏆 {winner.player} <span style={{color:'var(--gold-light)'}}>{winner.pts} pts</span>
                     </div>
                   )}
-                  <button
-                    style={{background:'none',border:'1px solid rgba(255,100,100,0.25)',color:'#ff7070',
-                      borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:'0.75rem',fontWeight:700}}
-                    onClick={e=>{e.stopPropagation();if(confirm(`Delete scores for Match ${mId}?`))onDelete(mId);}}
-                  >🗑</button>
+                  {isCustom ? (
+                    <button
+                      style={{background:'none',border:'1px solid rgba(255,100,100,0.25)',color:'#ff7070',
+                        borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:'0.75rem',fontWeight:700}}
+                      onClick={e=>{e.stopPropagation();if(confirm(`Delete custom match ${mId} and all its scores?`))onDeleteCustom(mId);}}
+                    >🗑 Match</button>
+                  ) : (
+                    <button
+                      style={{background:'none',border:'1px solid rgba(255,100,100,0.25)',color:'#ff7070',
+                        borderRadius:5,padding:'4px 10px',cursor:'pointer',fontSize:'0.75rem',fontWeight:700}}
+                      onClick={e=>{e.stopPropagation();if(confirm(`Delete scores for Match ${mId}?`))onDelete(mId);}}
+                    >🗑 Scores</button>
+                  )}
                   <span className="history-expand">{isOpen?'▲':'▼'}</span>
                 </div>
               </div>
 
               {isOpen && (
                 <div className="ranked-list">
-                  {ranked.map((r,idx)=>{
+                  {ranked.map((r)=>{
                     const pi=played.findIndex(x=>x.player===r.player);
-                    const is1=pi===0, is2=pi===1, is3=pi===2;
+                    const is1=pi===0,is2=pi===1,is3=pi===2;
                     const rowC=r.dnp?'row-dnp':is1?'row-gold':is2?'row-silver':is3?'row-bronze':'';
                     const avC=r.dnp?'av-dnp':is1?'av-gold':is2?'av-silver':is3?'av-bronze':'av-default';
                     const ptC=r.dnp?'pts-dnp':is1?'pts-g':is2?'pts-s':is3?'pts-b':'pts-n';
@@ -779,9 +1005,9 @@ function MatchHistory({scores, players, onDelete}) {
                           <div className="ranked-name">{r.player}</div>
                           {!r.dnp && (
                             <div className="ranked-sub">
-                              {is1 && <span className="badge-w">🏆 Winner</span>}
-                              {is2 && <span className="badge-2">🥈 2nd Place</span>}
-                              {is3 && <span className="badge-3">🥉 3rd Place</span>}
+                              {is1&&<span className="badge-w">🏆 Winner</span>}
+                              {is2&&<span className="badge-2">🥈 2nd Place</span>}
+                              {is3&&<span className="badge-3">🥉 3rd Place</span>}
                             </div>
                           )}
                         </div>
