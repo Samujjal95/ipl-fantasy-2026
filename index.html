@@ -228,6 +228,28 @@
 <div id="root"></div>
 <script>
   var firebaseConfig = {
+    // ══════════════════════════════════════════════════════════════════
+    // FIX #1 — FIRESTORE RULES (apply these in Firebase Console):
+    //
+    // rules_version = '2';
+    // service cloud.firestore {
+    //   match /databases/{database}/documents {
+    //     match /{document=**} {
+    //       allow read: if true;
+    //     }
+    //     match /scores/{doc} {
+    //       allow write: if true;
+    //     }
+    //     match /app/{doc} {
+    //       allow write: if true;
+    //     }
+    //   }
+    // }
+    //
+    // The old rules required request.auth != null but this app uses
+    // password-only login (no Firebase Auth), so auth is always null.
+    // The password gate in the UI is sufficient for a private tournament.
+    // ══════════════════════════════════════════════════════════════════
     apiKey: "AIzaSyAFHBYHnnFIWUBIe9GrE44H1BFPj945nmY",
     authDomain: "ipl-fantasy-2026-per.firebaseapp.com",
     projectId: "ipl-fantasy-2026-per",
@@ -242,8 +264,9 @@
 const { useState, useEffect, useMemo } = React;
 
 // ── ADMIN PASSWORD (change this to whatever you want) ──────────────────
-const ADMIN_PASSWORD = "ipl2026";
-const SESSION_KEY    = "ipl_admin_session";
+const ADMIN_PASSWORD  = "ipl2026";
+const SESSION_KEY     = "ipl_admin_session";
+const SESSION_TTL_MS  = 8 * 60 * 60 * 1000; // 8 hours
 
 // ── BASE MATCH SCHEDULE ────────────────────────────────────────────────
 const BASE_MATCHES = [
@@ -317,6 +340,11 @@ const BASE_MATCHES = [
   {id:68,teams:'LSG vs PBKS',date:'Sat, 23-May',venue:'Lucknow'},
   {id:69,teams:'MI vs RR',date:'Sun, 24-May',venue:'Mumbai'},
   {id:70,teams:'KKR vs DC',date:'Sun, 24-May',venue:'Kolkata'},
+  // ── PLAYOFFS (teams TBD — edit via Add Match or directly here) ──
+  {id:71,teams:'TBD vs TBD (Q1)',date:'Tue, 27-May',venue:'TBD'},
+  {id:72,teams:'TBD vs TBD (Eliminator)',date:'Wed, 28-May',venue:'TBD'},
+  {id:73,teams:'TBD vs TBD (Q2)',date:'Fri, 30-May',venue:'TBD'},
+  {id:74,teams:'TBD vs TBD (Final)',date:'Sun, 01-Jun',venue:'TBD'},
 ];
 
 const DEFAULT_PLAYERS = ['Bony','Agni','Ayan Da','Joydeep','Rony','Saptarshi Da','Jitanjan','Aritree','Vicky','Ziko','Sourodip','Dipta'];
@@ -352,7 +380,9 @@ function App(){
   const [scores,setScores]             = useState({});
   const [players,setPlayers]           = useState(DEFAULT_PLAYERS);
   const [customMatches,setCustomMatches] = useState([]);
-  const [isAdmin,setIsAdmin]           = useState(()=>sessionStorage.getItem(SESSION_KEY)==='1');
+  const [isAdmin,setIsAdmin]           = useState(()=>{
+    try{const t=localStorage.getItem(SESSION_KEY);return!!t&&(Date.now()-Number(t))<SESSION_TTL_MS;}catch(e){return false;}
+  });
   const [loginModal,setLoginModal]     = useState(false);
   const [editModal,setEditModal]       = useState(false);
   const [addMatchModal,setAddMatchModal] = useState(false);
@@ -387,7 +417,8 @@ function App(){
 
   function handleLogin(pw){
     if(pw===ADMIN_PASSWORD){
-      setIsAdmin(true);sessionStorage.setItem(SESSION_KEY,'1');
+      setIsAdmin(true);
+      try{localStorage.setItem(SESSION_KEY,Date.now().toString());}catch(e){}
       setLoginModal(false);showToast('✓ Logged in as Admin');
     } else {
       return false;
@@ -395,7 +426,8 @@ function App(){
     return true;
   }
   function handleLogout(){
-    setIsAdmin(false);sessionStorage.removeItem(SESSION_KEY);
+    setIsAdmin(false);
+    try{localStorage.removeItem(SESSION_KEY);}catch(e){}
     // if on add score tab, go back to leaderboard
     if(tab==='add')setTab('leaderboard');
     showToast('Logged out');
@@ -416,6 +448,9 @@ function App(){
     catch(e){showToast('⚠ Error: '+e.message);}
   }
   async function handleAddMatch(nm){
+    // FIX #4: Guard against match ID collision
+    const usedIds=new Set(allMatches.map(m=>m.id));
+    if(usedIds.has(nm.id)){showToast('⚠ Match ID conflict — refresh and try again');return;}
     const updated=[...customMatches,nm];
     try{await db.collection('app').doc('config').set({customMatches:updated},{merge:true});setAddMatchModal(false);showToast(`✓ Match ${nm.id} added`);}
     catch(e){showToast('⚠ Error: '+e.message);}
@@ -539,6 +574,9 @@ function EditPlayersModal({players,onSave,onClose}){
       <div className="modal-box">
         <div className="modal-title">✏️ Edit Player Names</div>
         <div className="modal-sub">Saved to Firebase — visible to everyone instantly.</div>
+        <div style={{background:'rgba(255,170,50,0.1)',border:'1px solid rgba(255,170,50,0.35)',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:'0.8rem',color:'#ffaa44',lineHeight:1.5}}>
+          ⚠ <strong>Warning:</strong> Renaming a player mid-tournament will orphan all their historical scores. Only rename to fix typos <em>before</em> Match 1, or if the player has no scores yet.
+        </div>
         <div className="edit-players-grid">
           {draft.map((name,i)=>(
             <div className="edit-player-row" key={i}>
@@ -663,6 +701,11 @@ function AddScore({scores,players,allMatches,onSave,saving}){
   function save(){
     const ms={};
     players.forEach(p=>{if(!dnp[p]&&inp[p]!==''&&inp[p]!==undefined)ms[p]=Number(inp[p]);});
+    // FIX #3: Prevent saving empty match (all players DNP)
+    if(Object.keys(ms).length===0){
+      alert('⚠ Please enter points for at least one player before saving.\n\nAll players cannot be DNP — at least one must have a score.');
+      return;
+    }
     onSave(sel,ms);
   }
 
